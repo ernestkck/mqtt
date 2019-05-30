@@ -1,9 +1,7 @@
 import paho.mqtt.client as mqtt
 import time, sys, statistics
 
-
-# todo https://wattlecourses.anu.edu.au/mod/forum/discuss.php?d=537042#p1592070
-
+# Data type for our userdata
 class Object(object):
     pass
 
@@ -16,20 +14,28 @@ userdata.activeClients = []
 userdata.currentHeap = []
 userdata.messagesReceived = []
 userdata.messagesSent = []
+userdata.recv = [0, 0, 0]
+userdata.loss = [0, 0, 0]
+userdata.dupe = [0, 0, 0]
+userdata.ooo = [0, 0, 0]
+userdata.gap = [0, 0, 0]
+userdata.gvar = [0, 0, 0]
 
 
-# Define event callbacks
+# Called when the client is connected to the server
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("Connected OK return code " + str(rc))
+        print("Connected OK " + str(rc))
     else:
         print("Failed to connect with return code " + str(rc))
     # client.subscribe("$SYS/#", 0);
 
 
+# Called when a message is received
 def on_message(client, userdata, msg):
     # print("QoS " + str(msg.qos) + " " + "message on topic " + msg.topic + ": " + msg.payload.decode("utf-8"))
 
+    # update the inter-message-gap
     def update_gap(qos, num):
         userdata.messages[qos].append(num)
         if userdata.lastTime[qos] == 0:
@@ -44,7 +50,6 @@ def on_message(client, userdata, msg):
                 num = int(payload)
                 update_gap(msg.qos, num)
         elif msg.topic.startswith("$SYS/broker/"):
-            print("received sys message at " + str(time.time() - userdata.startTime))
             if msg.topic == "$SYS/broker/clients/connected":
                 userdata.activeClients.append(int(payload))
             elif msg.topic == "$SYS/broker/heap/current":
@@ -53,18 +58,15 @@ def on_message(client, userdata, msg):
                 userdata.messagesReceived.append(float(payload))
             elif msg.topic == "$SYS/broker/load/messages/sent/1min":
                 userdata.messagesSent.append(float(payload))
-            # client.unsubscribe(msg.topic)
+            client.unsubscribe(msg.topic)
 
 
 def on_publish(client, userdata, mid):
-    print("message id: " + str(mid))
+    pass
 
 
 def on_subscribe(client, userdata, mid, granted_qos):
     pass
-    # print("Subscribed on " + str(mid) + " " + str(granted_qos))
-    # if userdata.starttime[granted_qos[0]] == sys.maxsize:
-    #    userdata.starttime[granted_qos[0]] = time.time()
 
 
 def on_disconnect(client, userdata, rc):
@@ -72,87 +74,17 @@ def on_disconnect(client, userdata, rc):
         print("Unexpected disconnection " + str(rc))
     else:
         print("Disconnected OK " + str(rc))
-        duration = userdata.endTime - userdata.startTime
-        print("Time elapsed: {:4f}".format(duration))
-
-        def print_stats(qos):
-            print("")
-            print("QoS " + str(qos))
-            messages = userdata.messages[qos]
-            message_set = set(messages)
-            gaps = userdata.gaps[qos]
-
-            def print_receive_rate(msg, t):
-                print("Rate of messages received = {:4f} per second".format(len(msg) / t))
-
-            def print_loss_rate(set):
-                set_range = max(set) - min(set) + 1
-                print("Rate of message loss = {:.2%}".format((set_range - len(set)) / set_range))
-
-            def print_duplicate_rate(msg, set):
-                print("Rate of duplicated messages = {:.2%}".format((len(msg) - len(set)) / len(msg)))
-
-            def print_ooo_rate(msg):
-                ooo = 0
-                for i, value in enumerate(msg, start=1):
-                    if msg[i - 1] > value:
-                        ooo += 1
-                print("Rate of out-of-order messages = {:.2%}".format(ooo / len(msg)))
-
-            def print_gaps(gaps):
-                print("Mean inter-message-gap and gap-variation = {:6f}, {:6f}".format(statistics.mean(gaps) * 1000,
-                                                                                       statistics.stdev(gaps) * 1000))
-
-            def print_everything(messages, duration, message_set, gaps):
-                print_receive_rate(messages, duration)
-                print_loss_rate(message_set)
-                print_duplicate_rate(messages, message_set)
-                print_ooo_rate(messages)
-                print_gaps(gaps)
-
-            def print_sys_stats(clients, heap, received, sent):
-                print("Average active clients: {:2f}".format(statistics.mean(clients)))
-                print("Average heap size: {:2f}".format(statistics.mean(heap)))
-                print("Average messages received: {:2f}".format(statistics.mean(received)))
-                print("Average messages sent: {:2f}".format(statistics.mean(sent)))
-
-            print("Total: ")
-            print_everything(messages, duration, message_set, gaps)
-            print_sys_stats(userdata.activeClients, userdata.currentHeap, userdata.messagesReceived,
-                            userdata.messagesSent)
-
-            if qos != 0:
-                # reference: https://stackoverflow.com/questions/2130016/splitting-a-list-into-n-parts-of-approximately-equal-length
-                def split(a, n):
-                    k, m = divmod(len(a), n)
-                    return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
-
-                messages_split = list(split(messages, 5))
-                sets_split = list(map(set, messages_split))
-                gaps_split = list(split(gaps, 5))
-                clients_split = list(split(userdata.activeClients, 5))
-                heap_split = list(split(userdata.currentHeap, 5))
-                received_split = list(split(userdata.messagesReceived, 5))
-                sent_split = list(split(userdata.messagesSent, 5))
-
-                print(str(len(messages_split[0])) + " messages in each partition")
-                print(str(len(userdata.activeClients))+ " clients values")
-                for i in range(5):
-                    print("Part " + str(i+1) + ": ")
-                    print_everything(messages_split[i], duration / 5, sets_split[i], gaps_split[i])
-                    print_sys_stats(clients_split[i], heap_split[i], received_split[i], sent_split[i])
-
-        print_stats(0)
-        print_stats(1)
-        print_stats(2)
 
 
 def on_unsubscribe(client, userdata, mid):
-    # print("Unsubbed " + str(mid) + " at " + str(time.time() - userdata.startTime))
     pass
 
+def ignore_messages(client, userdata, msg):
+    pass
 
+# Construct the client
 client = mqtt.Client(client_id="3310-u6381103", clean_session=True, userdata=userdata, transport="tcp")
+
 # Assign event callbacks
 client.on_message = on_message
 client.on_connect = on_connect
@@ -178,24 +110,130 @@ client.subscribe("$SYS/broker/heap/current", 0)
 client.subscribe("$SYS/broker/load/messages/received/1min", 0)
 client.subscribe("$SYS/broker/load/messages/sent/1min", 0)
 
+# start the network loop
 client.loop_start()
 
-# Publish a message
-# client.publish(topic, "my message")
-
-# Continue the network loop, exit when an error occurs
+# Continue the network loop
 while True:
     try:
-        if time.time() - userdata.statTime > 60:  # record stats every minute
+        if time.time() - userdata.statTime > 60:  # subscribe to the stats every minute
             userdata.statTime = time.time()
             client.subscribe("$SYS/broker/clients/connected", 0)
             client.subscribe("$SYS/broker/heap/current", 0)
             client.subscribe("$SYS/broker/load/messages/received/1min", 0)
             client.subscribe("$SYS/broker/load/messages/sent/1min", 0)
-            # print("Subbed at " + str(time.time() - userdata.startTime))
 
-        if time.time() - userdata.startTime > 90:  # stop after 5 mins
+        if time.time() - userdata.startTime > 300:  # stop after 5 mins
+            client.unsubscribe("counter/fast/q0")
+            client.unsubscribe("counter/fast/q1")
+            client.unsubscribe("counter/fast/q2")
+            client.on_message = ignore_messages   # ignore other incoming messages
+
             userdata.endTime = time.time()
+            duration = userdata.endTime - userdata.startTime
+
+            print("Time elapsed: {:4f}".format(duration))
+
+            def print_stats(qos):
+                print("")
+                print("QoS " + str(qos))
+                messages = userdata.messages[qos]
+                message_set = set(messages)
+                gaps = userdata.gaps[qos]
+
+                def print_receive_rate(msg, t):
+                    userdata.recv[qos] = len(msg)/t
+                    print("Rate of messages received = {:.4f} per second".format(userdata.recv[qos]))
+
+                def print_loss_rate(set):
+                    set_range = max(set) - min(set) + 1
+                    userdata.loss[qos] = (set_range - len(set)) / set_range
+                    print("Rate of message loss = {:.2%}".format(userdata.loss[qos]))
+
+                def print_duplicate_rate(msg, set):
+                    userdata.dupe[qos] = (len(msg) - len(set)) / len(msg)
+                    print("Rate of duplicated messages = {:.2%}".format(userdata.dupe[qos]))
+
+                def print_ooo_rate(msg):
+                    ooo = 0
+                    for i, value in enumerate(msg, start=1):
+                        if msg[i - 1] > value:
+                            ooo += 1
+                    userdata.ooo[qos] = ooo / len(msg)
+                    print("Rate of out-of-order messages = {:.2%}".format(userdata.ooo[qos]))
+
+                def print_gaps(gaps):
+                    userdata.gap[qos] = statistics.mean(gaps) * 1000
+                    userdata.gvar[qos] = statistics.pstdev(gaps) * 1000
+                    print("Mean inter-message-gap and gap-variation (ms) = {:6f}, {:6f}".format(
+                        userdata.gap[qos],
+                        userdata.gvar[qos]))
+
+                def print_everything(messages, duration, message_set, gaps):
+                    print_receive_rate(messages, duration)
+                    print_loss_rate(message_set)
+                    print_duplicate_rate(messages, message_set)
+                    print_ooo_rate(messages)
+                    print_gaps(gaps)
+
+                def print_sys_stats(clients, heap, received, sent):
+                    print("Average active clients: {:.3f}".format(statistics.mean(clients)))
+                    print("Average heap size: {:.3f}".format(statistics.mean(heap)))
+                    print("Average messages received: {:.3f}".format(statistics.mean(received)))
+                    print("Average messages sent: {:.3f}".format(statistics.mean(sent)))
+
+                print("Total messages received: " + str(len(messages)))
+                print_everything(messages, duration, message_set, gaps)
+                print_sys_stats(userdata.activeClients, userdata.currentHeap, userdata.messagesReceived,
+                                userdata.messagesSent)
+
+                # Partitioning the data for further inspection
+
+                # if qos != 0:
+                #     partitions = 2
+                #
+                #     # Reference: https://stackoverflow.com/questions/2130016/splitting-a-list-into-n-parts-of-approximately-equal-length
+                #     def split(a, n):
+                #         k, m = divmod(len(a), n)
+                #         return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
+                #
+                #     messages_split = list(split(messages, partitions))
+                #     sets_split = list(map(set, messages_split))
+                #     gaps_split = list(split(gaps, partitions))
+                #     clients_split = list(split(userdata.activeClients, partitions))
+                #     heap_split = list(split(userdata.currentHeap, partitions))
+                #     received_split = list(split(userdata.messagesReceived, partitions))
+                #     sent_split = list(split(userdata.messagesSent, partitions))
+                #
+                #     print(str(len(messages_split[0])) + " messages in each partition")
+                #     print(str(len(userdata.activeClients)) + " clients values")
+                #     for i in range(partitions):
+                #         print("Part " + str(i + 1) + ": ")
+                #         print_everything(messages_split[i], duration / partitions, sets_split[i], gaps_split[i])
+                #         print_sys_stats(clients_split[i], heap_split[i], received_split[i], sent_split[i])
+
+
+            print_stats(0)
+            print_stats(1)
+            print_stats(2)
+
+            client.publish("studentreport/u6381103/language", payload="Python, paho-mqtt", qos=2, retain=True)
+            client.publish("studentreport/u6381103/network", payload="ANU Ethernet in labs", qos=2, retain=True)
+            for i in range(3):
+                client.publish("studentreport/u6381103/slow/" + str(i) + "/recv", payload=userdata.recv[i], qos=2,
+                               retain=True)
+                client.publish("studentreport/u6381103/slow/" + str(i) + "/loss", payload=userdata.loss[i], qos=2,
+                               retain=True)
+                client.publish("studentreport/u6381103/slow/" + str(i) + "/dupe", payload=userdata.dupe[i], qos=2,
+                               retain=True)
+                client.publish("studentreport/u6381103/slow/" + str(i) + "/ooo", payload=userdata.ooo[i], qos=2,
+                               retain=True)
+                client.publish("studentreport/u6381103/slow/" + str(i) + "/gap", payload=userdata.gap[i], qos=2,
+                               retain=True)
+                client.publish("studentreport/u6381103/slow/" + str(i) + "/gvar", payload=userdata.gvar[i], qos=2,
+                               retain=True)
+
+
             client.loop_stop()
             client.disconnect()
             exit(0)
