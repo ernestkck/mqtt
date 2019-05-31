@@ -101,9 +101,9 @@ userdata.startTime = time.time()
 userdata.statTime = userdata.startTime
 
 # Subscribe to topics
-client.subscribe("counter/fast/q0", 0)
-client.subscribe("counter/fast/q1", 1)
-client.subscribe("counter/fast/q2", 2)
+client.subscribe("counter/slow/q0", 0)
+client.subscribe("counter/slow/q1", 1)
+client.subscribe("counter/slow/q2", 2)
 
 client.subscribe("$SYS/broker/clients/connected", 0)
 client.subscribe("$SYS/broker/heap/current", 0)
