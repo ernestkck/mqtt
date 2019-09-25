@@ -1,6 +1,8 @@
 import paho.mqtt.client as mqtt
 import time, sys, statistics
 
+# specify the topic for subscribing and publishing
+topic = "fast"
 # Data type for our userdata
 class Object(object):
     pass
@@ -101,9 +103,9 @@ userdata.startTime = time.time()
 userdata.statTime = userdata.startTime
 
 # Subscribe to topics
-client.subscribe("counter/slow/q0", 0)
-client.subscribe("counter/slow/q1", 1)
-client.subscribe("counter/slow/q2", 2)
+client.subscribe("counter/" + topic + "/q0", 0)
+client.subscribe("counter/" + topic + "/q1", 1)
+client.subscribe("counter/" + topic + "/q2", 2)
 
 client.subscribe("$SYS/broker/clients/connected", 0)
 client.subscribe("$SYS/broker/heap/current", 0)
@@ -124,9 +126,9 @@ while True:
             client.subscribe("$SYS/broker/load/messages/sent/1min", 0)
 
         if time.time() - userdata.startTime > 300:  # stop after 5 mins
-            client.unsubscribe("counter/fast/q0")
-            client.unsubscribe("counter/fast/q1")
-            client.unsubscribe("counter/fast/q2")
+            client.unsubscribe("counter/" + topic + "/q0")
+            client.unsubscribe("counter/" + topic + "/q1")
+            client.unsubscribe("counter/" + topic + "/q2")
             client.on_message = ignore_messages   # ignore other incoming messages
 
             userdata.endTime = time.time()
@@ -220,17 +222,17 @@ while True:
             client.publish("studentreport/u6381103/language", payload="Python, paho-mqtt", qos=2, retain=True)
             client.publish("studentreport/u6381103/network", payload="ANU Ethernet in labs", qos=2, retain=True)
             for i in range(3):
-                client.publish("studentreport/u6381103/slow/" + str(i) + "/recv", payload=userdata.recv[i], qos=2,
+                client.publish("studentreport/u6381103/" + topic + "/" + str(i) + "/recv", payload=userdata.recv[i], qos=2,
                                retain=True)
-                client.publish("studentreport/u6381103/slow/" + str(i) + "/loss", payload=userdata.loss[i], qos=2,
+                client.publish("studentreport/u6381103/" + topic + "/" + str(i) + "/loss", payload=userdata.loss[i], qos=2,
                                retain=True)
-                client.publish("studentreport/u6381103/slow/" + str(i) + "/dupe", payload=userdata.dupe[i], qos=2,
+                client.publish("studentreport/u6381103/" + topic + "/" + str(i) + "/dupe", payload=userdata.dupe[i], qos=2,
                                retain=True)
-                client.publish("studentreport/u6381103/slow/" + str(i) + "/ooo", payload=userdata.ooo[i], qos=2,
+                client.publish("studentreport/u6381103/" + topic + "/" + str(i) + "/ooo", payload=userdata.ooo[i], qos=2,
                                retain=True)
-                client.publish("studentreport/u6381103/slow/" + str(i) + "/gap", payload=userdata.gap[i], qos=2,
+                client.publish("studentreport/u6381103/" + topic + "/" + str(i) + "/gap", payload=userdata.gap[i], qos=2,
                                retain=True)
-                client.publish("studentreport/u6381103/slow/" + str(i) + "/gvar", payload=userdata.gvar[i], qos=2,
+                client.publish("studentreport/u6381103/" + topic + "/" + str(i) + "/gvar", payload=userdata.gvar[i], qos=2,
                                retain=True)
 
 
